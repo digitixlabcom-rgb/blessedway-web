@@ -1,23 +1,37 @@
 {
-  "name": "blessway-ledger",
+  "name": "barcode-scanner-pos-export",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@zxing/browser": "^0.1.5",
+    "@zxing/library": "^0.21.3",
+    "exceljs": "^4.4.0",
+    "file-saver": "^2.0.5",
+    "idb": "^8.0.0",
+    "lucide-react": "^0.383.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "lucide-react": "^0.383.0"
+    "react-router-dom": "^6.26.2",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "@types/file-saver": "^2.0.7",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@types/uuid": "^9.0.8",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
-    "vite": "^5.3.1"
+    "typescript": "^5.5.4",
+    "vite": "^5.3.1",
+    "vite-plugin-pwa": "^0.20.5"
   }
 }
