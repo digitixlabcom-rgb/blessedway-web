@@ -56,6 +56,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  // The frontend downsizes captures before sending them here, but guard
+  // anyway: an oversized body can otherwise crash the function with an
+  // opaque platform-level error before this handler even runs.
+  if (image.length > 6_000_000) {
+    res.status(413).json({
+      error: "payload_too_large",
+      message: "The photo is too large to process. Try again — it should be downsized automatically.",
+    });
+    return;
+  }
+
   const commaIndex = image.indexOf(",");
   const base64Data = image.slice(commaIndex + 1);
   const mimeType = image.slice(5, image.indexOf(";")) || "image/jpeg";

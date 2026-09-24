@@ -132,8 +132,29 @@ interface GeminiApiResponse {
   confidence: number;
 }
 
-function canvasToJpegDataUrl(canvas: HTMLCanvasElement, quality = 0.85): string {
-  return canvas.toDataURL("image/jpeg", quality);
+// Phone rear cameras routinely ignore a getUserMedia "ideal" resolution
+// hint and hand back their native resolution instead (often well above
+// 4000px on the long edge on modern hardware). A vision LLM gains nothing
+// from that — it downsamples internally regardless — but the resulting
+// multi-megabyte base64 payload can exceed a serverless function's request
+// body size limit, which fails as an opaque platform-level 500 before our
+// own error handling ever runs. Downscale before sending to Gemini.
+const GEMINI_MAX_DIMENSION = 1600;
+
+function toGeminiJpegDataUrl(canvas: HTMLCanvasElement, quality = 0.82): string {
+  const longestEdge = Math.max(canvas.width, canvas.height);
+  if (longestEdge <= GEMINI_MAX_DIMENSION) {
+    return canvas.toDataURL("image/jpeg", quality);
+  }
+
+  const scale = GEMINI_MAX_DIMENSION / longestEdge;
+  const resized = document.createElement("canvas");
+  resized.width = Math.round(canvas.width * scale);
+  resized.height = Math.round(canvas.height * scale);
+  const ctx = resized.getContext("2d");
+  if (!ctx) return canvas.toDataURL("image/jpeg", quality);
+  ctx.drawImage(canvas, 0, 0, resized.width, resized.height);
+  return resized.toDataURL("image/jpeg", quality);
 }
 
 async function recognizeLabelWithGemini(
@@ -147,7 +168,7 @@ async function recognizeLabelWithGemini(
     const response = await fetch("/api/label-scan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: canvasToJpegDataUrl(image), categories }),
+      body: JSON.stringify({ image: toGeminiJpegDataUrl(image), categories }),
       signal: controller.signal,
     });
 
