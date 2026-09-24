@@ -19,16 +19,32 @@ export function LabelOcrCapture({ onResult, onClose }: LabelOcrCaptureProps) {
     let cancelled = false;
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 1280 } } })
-      .then((stream) => {
+      .then(async (stream) => {
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
         streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
-        setPhase("live");
+        const video = videoRef.current;
+        if (!video) return;
+        video.srcObject = stream;
+        try {
+          // Setting srcObject alone doesn't reliably start rendering frames
+          // on every mobile browser, even with autoplay+muted+playsInline —
+          // without an explicit play() call the preview can stay black while
+          // the stream is technically "attached", and a capture off that
+          // black frame then has nothing for OCR to read.
+          await video.play();
+        } catch (playErr) {
+          if (cancelled) return;
+          setPhase("error");
+          setError(playErr instanceof Error ? playErr.message : "Could not start the camera preview.");
+          return;
+        }
+        if (!cancelled) setPhase("live");
       })
       .catch((err) => {
+        if (cancelled) return;
         setPhase("error");
         setError(err instanceof Error ? err.message : "Could not access the camera.");
       });
@@ -43,6 +59,12 @@ export function LabelOcrCapture({ onResult, onClose }: LabelOcrCaptureProps) {
     const video = videoRef.current;
     if (!video) return;
 
+    if (!video.videoWidth || !video.videoHeight) {
+      setPhase("error");
+      setError("The camera preview isn't ready yet — wait a moment for the live picture to appear and try again.");
+      return;
+    }
+
     const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -52,14 +74,20 @@ export function LabelOcrCapture({ onResult, onClose }: LabelOcrCaptureProps) {
 
     setPhase("processing");
     try {
-      const result = await recognizeProductLabel(canvas);
+      const result = await Promise.race([
+        recognizeProductLabel(canvas),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 30000)
+        ),
+      ]);
       onResult(result);
     } catch {
       // tesseract.js's failure modes here are indistinguishable client-side
       // (a blocked/slow network fetch of its recognition engine looks the
-      // same as an internal decode error), so cover both real causes rather
-      // than guessing — a "bad lighting" message alone would mislead anyone
-      // whose real problem is no internet connection.
+      // same as an internal decode error or our own 30s timeout above), so
+      // cover both real causes rather than guessing — a "bad lighting"
+      // message alone would mislead anyone whose real problem is no
+      // internet connection or a slow first-time engine download.
       setPhase("error");
       setError(
         "Couldn't read the label. This needs an internet connection the first time (to download the recognition engine) and works best in good, even lighting. Check your connection and try again."
