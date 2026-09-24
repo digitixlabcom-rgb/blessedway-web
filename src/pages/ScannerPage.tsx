@@ -277,6 +277,7 @@ export function ScannerPage({ settings, onProductSaved, onOpenProduct, onSetting
             initial={flow.values}
             lookupStatus={flow.lookupStatus}
             categories={categories}
+            geminiApiKey={settings.geminiApiKey}
             saveLabel={flow.updateExistingId ? "Update Product" : "Save Product"}
             onSave={handleSaveForm}
             onCancel={resetToScanning}

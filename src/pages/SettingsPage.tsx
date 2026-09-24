@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, Eye, EyeOff } from "lucide-react";
 import { productLookupService, LOOKUP_PROVIDERS } from "../services/ProductLookupService";
 import { exportService } from "../services/ExportService";
 import { getDB, ensureSeedData } from "../db/database";
@@ -17,8 +17,27 @@ const KNOWN_TEST_BARCODE = "3017620422003"; // widely stocked product, used only
 
 export function SettingsPage({ settings, onChange }: SettingsPageProps) {
   const [testStatus, setTestStatus] = useState<"idle" | "testing" | "ok" | "fail">("idle");
+  const [geminiTestStatus, setGeminiTestStatus] = useState<"idle" | "testing" | "ok" | "fail">("idle");
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { show } = useToast();
+
+  async function testGeminiKey() {
+    const key = settings.geminiApiKey.trim();
+    if (!key) {
+      show("Enter a Gemini API key first.", "info");
+      return;
+    }
+    setGeminiTestStatus("testing");
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`
+      );
+      setGeminiTestStatus(response.ok ? "ok" : "fail");
+    } catch {
+      setGeminiTestStatus("fail");
+    }
+  }
 
   async function testConnection() {
     setTestStatus("testing");
@@ -92,6 +111,50 @@ export function SettingsPage({ settings, onChange }: SettingsPageProps) {
             Test Connection
           </button>
         </Row>
+      </Section>
+
+      <Section title="AI Label Reader">
+        <p className="text-sm text-slate-500">
+          Optional. When set, "Scan Product Label" uses Google Gemini to read the product name, brand,
+          and category from a photo — far more accurate than the built-in offline reader it falls back
+          to otherwise. The key is saved only on this device and sent only to Google, never anywhere
+          else.
+        </p>
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <input
+              type={showGeminiKey ? "text" : "password"}
+              value={settings.geminiApiKey}
+              onChange={(e) => onChange({ geminiApiKey: e.target.value })}
+              placeholder="Paste your Gemini API key"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 pr-9 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => setShowGeminiKey((v) => !v)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400"
+            >
+              {showGeminiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          <button
+            onClick={testGeminiKey}
+            className="flex items-center gap-1 whitespace-nowrap rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-600"
+          >
+            {geminiTestStatus === "testing" && <Loader2 size={14} className="animate-spin" />}
+            {geminiTestStatus === "ok" && <CheckCircle2 size={14} className="text-emerald-600" />}
+            {geminiTestStatus === "fail" && <XCircle size={14} className="text-red-600" />}
+            Test Key
+          </button>
+        </div>
+        <a
+          href="https://aistudio.google.com/app/apikey"
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs font-medium text-brand-600"
+        >
+          Get a free key at aistudio.google.com/app/apikey →
+        </a>
       </Section>
 
       <Section title="Scanner">

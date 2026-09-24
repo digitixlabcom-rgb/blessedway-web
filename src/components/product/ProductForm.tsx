@@ -20,6 +20,7 @@ interface ProductFormProps {
   initial: ProductFormValues;
   lookupStatus: LookupStatus;
   categories: Category[];
+  geminiApiKey: string;
   barcodeEditable?: boolean;
   saveLabel?: string;
   onSave: (values: ProductFormValues) => void;
@@ -41,6 +42,7 @@ export function ProductForm({
   initial,
   lookupStatus,
   categories,
+  geminiApiKey,
   barcodeEditable = false,
   saveLabel = "Save Product",
   onSave,
@@ -310,6 +312,7 @@ export function ProductForm({
       {showLabelScanner && (
         <LabelOcrCapture
           categories={categories.map((c) => c.name)}
+          geminiApiKey={geminiApiKey}
           onResult={handleLabelResult}
           onClose={() => setShowLabelScanner(false)}
         />

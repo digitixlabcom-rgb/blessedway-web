@@ -67,23 +67,32 @@ mode.
 
 Two readers, tried in order (`src/services/OcrService.ts`):
 
-1. **Gemini** (`api/label-scan.ts`) — a vision LLM reads the photo directly
-   and suggests a category too (e.g. "Skin Care" for a cosmetic it doesn't
-   recognize by name). Needs `GEMINI_API_KEY` set as a Vercel environment
-   variable (see `.env.example`) — the key lives only in that serverless
-   function and is never sent to the browser. Get a free key at
-   [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey),
-   add it under Vercel → Project → Settings → Environment Variables, then
-   redeploy.
+1. **Gemini** — a vision LLM reads the photo directly and suggests a
+   category too (e.g. "Skin Care" for a cosmetic it doesn't recognize by
+   name). Called directly from the browser using an API key entered on the
+   **Settings** page (stored only in this device's local IndexedDB, sent
+   only to Google — never bundled into the app or shared elsewhere). Get a
+   free key at
+   [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey).
+   This app has exactly one user (whoever runs it on their own phone), so a
+   client-held key is an intentional, scoped exception to routing keyed
+   providers through a backend — do not reuse this pattern for a
+   multi-tenant deployment.
 2. **On-device OCR** (`tesseract.js`, WASM — the image never leaves the
-   browser) — the automatic fallback whenever Gemini isn't configured, the
-   request fails, or it can't identify the product. Cruder (a
-   tallest-line-on-the-label heuristic for the brand), but needs no backend
-   and was verified against a real product photo.
+   browser) — the automatic fallback whenever no key is set, the request
+   fails, or Gemini can't identify the product. Cruder (a
+   tallest-line-on-the-label heuristic for the brand), but needs no
+   configuration and was verified against a real product photo.
 
-Without a `GEMINI_API_KEY` set, label scanning still works end-to-end via
-the on-device fallback alone — Gemini is a quality upgrade, not a
-requirement.
+Without a key set, label scanning still works end-to-end via the on-device
+fallback alone — Gemini is a quality upgrade, not a requirement.
+
+### Installing on a phone
+
+This is a PWA, so on Android Chrome, opening the deployed URL and choosing
+"Add to Home Screen" / "Install app" gives it its own home-screen icon and
+a full-screen, no-browser-chrome window — the practical equivalent of a
+native app without needing to build and sign an `.apk`.
 
 ### Barcodes are always text
 

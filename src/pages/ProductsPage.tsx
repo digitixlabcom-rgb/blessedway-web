@@ -22,7 +22,7 @@ const STATUS_LABEL: Record<LookupStatus, string> = {
   manual: "Manual",
 };
 
-export function ProductsPage({ highlightProductId, onHighlightHandled }: ProductsPageProps) {
+export function ProductsPage({ settings, highlightProductId, onHighlightHandled }: ProductsPageProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [query, setQuery] = useState("");
@@ -295,6 +295,7 @@ export function ProductsPage({ highlightProductId, onHighlightHandled }: Product
             }}
             lookupStatus={editing.lookupStatus}
             categories={categories}
+            geminiApiKey={settings.geminiApiKey}
             barcodeEditable
             saveLabel="Update Product"
             onSave={handleEditSave}

@@ -82,6 +82,7 @@ export interface AppSettings {
   posExportFields: string[];
   activeSessionId: string | null;
   duplicatesPrevented: number;
+  geminiApiKey: string;
 }
 
 export const DEFAULT_CATEGORIES = [
@@ -113,6 +114,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   posExportFields: ["barcode", "product_name", "brand_name", "category"],
   activeSessionId: null,
   duplicatesPrevented: 0,
+  geminiApiKey: "",
 };
 
 export interface ProductFilters {
