@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, X } from "lucide-react";
 import { recognizeProductLabel, type LabelOcrResult } from "../../services/OcrService";
 
@@ -9,50 +9,122 @@ interface LabelOcrCaptureProps {
 
 type Phase = "starting" | "live" | "processing" | "error";
 
+// Errors that typically mean the camera hardware hasn't been released yet by
+// a just-closed consumer (the barcode scanner behind this modal) rather than
+// a real, permanent failure — worth one automatic retry after a short pause.
+const TRANSIENT_ERROR_NAMES = new Set(["NotReadableError", "TrackStartError", "AbortError"]);
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Polls for real video dimensions instead of trusting play() resolving —
+// play() can resolve before the browser has actually negotiated a frame
+// size, which previously let a capture through against a 0x0/black frame.
+async function waitForVideoDimensions(video: HTMLVideoElement, timeoutMs: number): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (video.videoWidth > 0 && video.videoHeight > 0) return true;
+    await wait(100);
+  }
+  return video.videoWidth > 0 && video.videoHeight > 0;
+}
+
 export function LabelOcrCapture({ onResult, onClose }: LabelOcrCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const generationRef = useRef(0);
   const [phase, setPhase] = useState<Phase>("starting");
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 1280 } } })
-      .then(async (stream) => {
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        streamRef.current = stream;
-        const video = videoRef.current;
-        if (!video) return;
-        video.srcObject = stream;
-        try {
-          // Setting srcObject alone doesn't reliably start rendering frames
-          // on every mobile browser, even with autoplay+muted+playsInline —
-          // without an explicit play() call the preview can stay black while
-          // the stream is technically "attached", and a capture off that
-          // black frame then has nothing for OCR to read.
-          await video.play();
-        } catch (playErr) {
-          if (cancelled) return;
-          setPhase("error");
-          setError(playErr instanceof Error ? playErr.message : "Could not start the camera preview.");
-          return;
-        }
-        if (!cancelled) setPhase("live");
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setPhase("error");
-        setError(err instanceof Error ? err.message : "Could not access the camera.");
-      });
+  const stopStream = useCallback(() => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  }, []);
 
+  const startCamera = useCallback(async () => {
+    const generation = ++generationRef.current;
+    stopStream();
+    setPhase("starting");
+    setError(null);
+
+    // Simple facingMode-only constraints — the previous forced 1280x1280
+    // square resolution was too strict for this device's camera and caused
+    // getUserMedia to fail outright ("Could not start video source").
+    const constraints: MediaStreamConstraints = { video: { facingMode: { ideal: "environment" } } };
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+    } catch (err) {
+      const name = err instanceof Error ? err.name : "";
+      if (TRANSIENT_ERROR_NAMES.has(name)) {
+        await wait(600);
+        if (generation !== generationRef.current) return;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (retryErr) {
+          if (generation !== generationRef.current) return;
+          setPhase("error");
+          setError(
+            retryErr instanceof Error
+              ? `Could not start the camera (${retryErr.message}). Close this and try again in a moment.`
+              : "Could not start the camera."
+          );
+          return;
+        }
+      } else {
+        if (generation !== generationRef.current) return;
+        setPhase("error");
+        setError(
+          name === "NotAllowedError"
+            ? "Camera permission was denied. Allow camera access for this site and try again."
+            : err instanceof Error
+            ? err.message
+            : "Could not access the camera."
+        );
+        return;
+      }
+    }
+
+    if (generation !== generationRef.current) {
+      stream.getTracks().forEach((t) => t.stop());
+      return;
+    }
+
+    streamRef.current = stream;
+    const video = videoRef.current;
+    if (!video) return;
+    video.srcObject = stream;
+
+    try {
+      await video.play();
+    } catch (playErr) {
+      if (generation !== generationRef.current) return;
+      setPhase("error");
+      setError(playErr instanceof Error ? playErr.message : "Could not start the camera preview.");
+      return;
+    }
+
+    const gotFrame = await waitForVideoDimensions(video, 4000);
+    if (generation !== generationRef.current) return;
+
+    if (!gotFrame) {
+      setPhase("error");
+      setError("The camera preview never produced a picture. Close this and try again.");
+      return;
+    }
+
+    setPhase("live");
+  }, [stopStream]);
+
+  useEffect(() => {
+    startCamera();
     return () => {
-      cancelled = true;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
+      generationRef.current++;
+      stopStream();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function handleCapture() {
@@ -76,9 +148,7 @@ export function LabelOcrCapture({ onResult, onClose }: LabelOcrCaptureProps) {
     try {
       const result = await Promise.race([
         recognizeProductLabel(canvas),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("timeout")), 30000)
-        ),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000)),
       ]);
       onResult(result);
     } catch {
@@ -132,7 +202,7 @@ export function LabelOcrCapture({ onResult, onClose }: LabelOcrCaptureProps) {
             <p className="text-sm">{error}</p>
             <div className="flex gap-2">
               <button
-                onClick={() => setPhase("live")}
+                onClick={() => startCamera()}
                 className="rounded-lg bg-white px-4 py-2 text-sm font-semibold text-slate-900"
               >
                 Try Again
