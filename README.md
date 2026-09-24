@@ -18,6 +18,54 @@ Opens at http://localhost:5173. For camera scanning, open it on a phone (or
 desktop with a webcam) over HTTPS or localhost — browsers require a secure
 context for camera access.
 
+## Building the Android app (.apk)
+
+The `android/` folder is a real, committed native Android project (via
+[Capacitor](https://capacitorjs.com)) that wraps this web app — build it in
+Android Studio to get an installable `.apk`, no web hosting required at all.
+
+1. **Install prerequisites** (skip anything you already have): [Android
+   Studio](https://developer.android.com/studio), which bundles the Android
+   SDK.
+2. **Pull this branch** and install dependencies:
+   ```bash
+   git clone https://github.com/digitixlabcom-rgb/blessedway-web.git
+   cd blessedway-web
+   git checkout claude/barcode-scanner-pos-export-xxedb7
+   npm install
+   ```
+3. **Build the web app and sync it into the Android project** (re-run this
+   any time you pull web-app changes and want them in the app):
+   ```bash
+   npm run android:sync
+   ```
+4. **Open the Android project**:
+   ```bash
+   npm run android:open
+   ```
+   This opens the `android/` folder in Android Studio (or open it manually:
+   Android Studio → Open → select the `android` folder in this repo).
+5. Let Gradle sync finish (Android Studio does this automatically on first
+   open — can take a few minutes).
+6. **Build the APK**: menu bar → **Build → Build App Bundle(s) / APK(s) →
+   Build APK(s)**. When it finishes, click the **locate** link in the
+   notification, or find it at
+   `android/app/build/outputs/apk/debug/app-debug.apk`.
+7. **Install it on your phone**: copy that `.apk` file to your phone (USB,
+   email to yourself, cloud drive — anything) and open it there. Android
+   will ask you to allow installs from that source the first time; approve
+   it, then tap the file to install.
+
+Camera permission is already declared in the Android manifest
+(`android/app/src/main/AndroidManifest.xml`); Android will prompt for it the
+first time the app opens the scanner, same as a website would.
+
+The app's data (products, categories, Gemini key, etc.) is stored inside
+this app's own local database on the phone — separate from whatever you
+scanned earlier in the browser version, since it's a different origin.
+Use **Export Backup** in one and **Restore from backup** in the other if you
+want to move data across.
+
 ## Build
 
 ```bash
