@@ -58,15 +58,32 @@ in frontend code.
 ### Label OCR fallback
 
 When a barcode isn't found (common for non-food items, since the default
-provider is Open Food Facts), the confirmation form offers **Scan Product
-Label**: it opens the camera, and on-device OCR (`tesseract.js`, WASM — the
-image never leaves the browser) reads the label to guess the product name
-(with size, e.g. "200 ml", appended) and the brand, filling in whatever
-fields are still empty. This is a best-effort draft, not a lookup — it's
-always shown for review/edit before saving, never auto-saved. First use
-needs an internet connection to download the OCR engine (a few MB, cached
-afterward); the heuristic (tallest line on the label = brand) was verified
-against a real product photo in `src/services/OcrService.ts`.
+lookup provider is Open Food Facts), the confirmation form offers **Scan
+Product Label**: it opens the camera and reads the label to fill in
+whatever of product name (with size, e.g. "200 ml", appended), brand, and
+category are still empty. This is always a best-effort draft, not a lookup —
+it's shown for review/edit before saving, never auto-saved, in either scan
+mode.
+
+Two readers, tried in order (`src/services/OcrService.ts`):
+
+1. **Gemini** (`api/label-scan.ts`) — a vision LLM reads the photo directly
+   and suggests a category too (e.g. "Skin Care" for a cosmetic it doesn't
+   recognize by name). Needs `GEMINI_API_KEY` set as a Vercel environment
+   variable (see `.env.example`) — the key lives only in that serverless
+   function and is never sent to the browser. Get a free key at
+   [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey),
+   add it under Vercel → Project → Settings → Environment Variables, then
+   redeploy.
+2. **On-device OCR** (`tesseract.js`, WASM — the image never leaves the
+   browser) — the automatic fallback whenever Gemini isn't configured, the
+   request fails, or it can't identify the product. Cruder (a
+   tallest-line-on-the-label heuristic for the brand), but needs no backend
+   and was verified against a real product photo.
+
+Without a `GEMINI_API_KEY` set, label scanning still works end-to-end via
+the on-device fallback alone — Gemini is a quality upgrade, not a
+requirement.
 
 ### Barcodes are always text
 

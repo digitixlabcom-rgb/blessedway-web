@@ -92,30 +92,45 @@ export function ProductForm({
     return Object.keys(next).length === 0;
   }
 
-  function handleLabelResult(result: LabelOcrResult) {
+  async function handleLabelResult(result: LabelOcrResult) {
     setShowLabelScanner(false);
     setLastOcrText(result.rawText || null);
 
+    // Compute what to fill from the current (closure) snapshot of values —
+    // not inside the setValues updater. React doesn't guarantee a function
+    // updater runs synchronously before the next line, so mutating outer
+    // variables from inside one (as this used to do) reads back stale/empty
+    // results here even though the state update itself lands correctly.
     const filled: string[] = [];
-    setValues((v) => {
-      const next = { ...v };
-      if (!next.productName.trim() && result.guessedProductName) {
-        next.productName = result.guessedProductName;
-        filled.push("product name");
-      }
-      if (!next.brandName.trim() && result.guessedBrand) {
-        next.brandName = result.guessedBrand;
-        filled.push("brand");
-      }
-      return next;
-    });
+    const next = { ...values };
+    if (!next.productName.trim() && result.guessedProductName) {
+      next.productName = result.guessedProductName;
+      filled.push("product name");
+    }
+    if (!next.brandName.trim() && result.guessedBrand) {
+      next.brandName = result.guessedBrand;
+      filled.push("brand");
+    }
+    let categoryToApply: string | null = null;
+    if (!next.category.trim() && result.guessedCategory) {
+      next.category = result.guessedCategory;
+      categoryToApply = result.guessedCategory;
+      filled.push("category");
+    }
+    setValues(next);
+
+    if (categoryToApply && !categories.some((c) => c.name === categoryToApply)) {
+      await categoryService.add(categoryToApply);
+      onCategoryAdded?.();
+    }
 
     if (!result.guessedProductName && !result.guessedBrand) {
       show("Couldn't make out the label clearly — see the scanned text below and fill in manually.", "info");
     } else if (filled.length === 0) {
-      show("Name and brand already filled — see the scanned text below if you want to copy from it.", "info");
+      show("Those fields were already filled — see the scanned text below if you want to copy from it.", "info");
     } else {
-      show(`Filled ${filled.join(" and ")} from the label. Please double-check before saving.`, "success");
+      const sourceLabel = result.source === "gemini" ? "the label" : "the label (offline reading)";
+      show(`Filled ${filled.join(", ")} from ${sourceLabel}. Please double-check before saving.`, "success");
     }
   }
 
@@ -144,7 +159,7 @@ export function ProductForm({
           className="flex w-full items-center justify-center gap-2 rounded-lg border border-brand-300 bg-brand-50 py-2.5 text-sm font-semibold text-brand-700 hover:bg-brand-100"
         >
           <ScanText size={16} />
-          Scan Product Label (fill name &amp; brand from a photo)
+          Scan Product Label (fill name, brand &amp; category from a photo)
         </button>
       )}
 
@@ -282,7 +297,11 @@ export function ProductForm({
       {extraActions}
 
       {showLabelScanner && (
-        <LabelOcrCapture onResult={handleLabelResult} onClose={() => setShowLabelScanner(false)} />
+        <LabelOcrCapture
+          categories={categories.map((c) => c.name)}
+          onResult={handleLabelResult}
+          onClose={() => setShowLabelScanner(false)}
+        />
       )}
     </div>
   );

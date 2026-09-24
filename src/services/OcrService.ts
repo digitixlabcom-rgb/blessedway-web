@@ -18,7 +18,9 @@ export interface LabelOcrResult {
   guessedProductName: string;
   guessedBrand: string;
   guessedSize: string;
+  guessedCategory?: string;
   confidence: number;
+  source: "gemini" | "tesseract";
 }
 
 export interface OcrLine {
@@ -65,7 +67,7 @@ function cleanLine(text: string): string {
 export function deriveLabelGuesses(
   text: string,
   lines: OcrLine[]
-): Omit<LabelOcrResult, "confidence"> {
+): Pick<LabelOcrResult, "rawText" | "guessedProductName" | "guessedBrand" | "guessedSize"> {
   const sizeMatch = text.match(SIZE_REGEX);
   const guessedSize = sizeMatch ? sizeMatch[0].replace(/\s+/g, " ").trim() : "";
 
@@ -108,5 +110,82 @@ export function deriveLabelGuesses(
 
 export async function recognizeProductLabel(image: HTMLCanvasElement): Promise<LabelOcrResult> {
   const { text, confidence, lines } = await recognize(image);
-  return { ...deriveLabelGuesses(text, lines), confidence };
+  return { ...deriveLabelGuesses(text, lines), confidence, source: "tesseract" };
+}
+
+// ---- Gemini-backed path -----------------------------------------------
+//
+// A vision LLM reads the label far more reliably than the line-height
+// heuristic above, and can sensibly name a category too (e.g. "Skin Care"),
+// but it needs a server-side API key — so this calls our own same-origin
+// backend function, which is the only thing that ever holds the Gemini key.
+// Never call the Gemini API directly from the browser.
+
+const GEMINI_TIMEOUT_MS = 20000;
+
+interface GeminiApiResponse {
+  found: boolean;
+  productName: string;
+  brandName: string;
+  category: string;
+  confidence: number;
+}
+
+function canvasToJpegDataUrl(canvas: HTMLCanvasElement, quality = 0.85): string {
+  return canvas.toDataURL("image/jpeg", quality);
+}
+
+async function recognizeLabelWithGemini(
+  image: HTMLCanvasElement,
+  categories: string[]
+): Promise<LabelOcrResult> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+
+  try {
+    const response = await fetch("/api/label-scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: canvasToJpegDataUrl(image), categories }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new Error(body?.message || `Gemini proxy returned ${response.status}`);
+    }
+
+    const data = (await response.json()) as GeminiApiResponse;
+    if (!data.found) {
+      throw new Error("Gemini could not identify the product in the photo.");
+    }
+
+    return {
+      rawText: "",
+      guessedProductName: data.productName,
+      guessedBrand: data.brandName,
+      guessedSize: "",
+      guessedCategory: data.category || undefined,
+      confidence: data.confidence,
+      source: "gemini",
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Tries Gemini first (best accuracy, needs internet + a configured backend
+// key); falls back to the fully on-device Tesseract heuristic on any
+// failure — missing/invalid API key, network error, timeout, or Gemini
+// simply not recognizing the product — so label scanning still works
+// without any backend configured at all, just with a cruder guess.
+export async function recognizeLabelSmart(
+  image: HTMLCanvasElement,
+  categories: string[]
+): Promise<LabelOcrResult> {
+  try {
+    return await recognizeLabelWithGemini(image, categories);
+  } catch {
+    return recognizeProductLabel(image);
+  }
 }

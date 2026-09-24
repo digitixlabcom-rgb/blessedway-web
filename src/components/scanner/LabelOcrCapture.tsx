@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, X } from "lucide-react";
-import { recognizeProductLabel, type LabelOcrResult } from "../../services/OcrService";
+import { recognizeLabelSmart, type LabelOcrResult } from "../../services/OcrService";
 
 interface LabelOcrCaptureProps {
+  categories: string[];
   onResult: (result: LabelOcrResult) => void;
   onClose: () => void;
 }
@@ -30,7 +31,7 @@ async function waitForVideoDimensions(video: HTMLVideoElement, timeoutMs: number
   return video.videoWidth > 0 && video.videoHeight > 0;
 }
 
-export function LabelOcrCapture({ onResult, onClose }: LabelOcrCaptureProps) {
+export function LabelOcrCapture({ categories, onResult, onClose }: LabelOcrCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const generationRef = useRef(0);
@@ -176,20 +177,19 @@ export function LabelOcrCapture({ onResult, onClose }: LabelOcrCaptureProps) {
     setPhase("processing");
     try {
       const result = await Promise.race([
-        recognizeProductLabel(canvas),
+        recognizeLabelSmart(canvas, categories),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000)),
       ]);
       onResult(result);
     } catch {
-      // tesseract.js's failure modes here are indistinguishable client-side
-      // (a blocked/slow network fetch of its recognition engine looks the
-      // same as an internal decode error or our own 30s timeout above), so
-      // cover both real causes rather than guessing — a "bad lighting"
-      // message alone would mislead anyone whose real problem is no
-      // internet connection or a slow first-time engine download.
+      // recognizeLabelSmart already tried Gemini and fell back to the
+      // on-device OCR itself — reaching here means both failed (or our own
+      // 30s timeout won the race), so the causes are genuinely mixed: no
+      // internet, a slow first-time engine download, or just a hard-to-read
+      // label. Cover all of them rather than guessing at one.
       setPhase("error");
       setError(
-        "Couldn't read the label. This needs an internet connection the first time (to download the recognition engine) and works best in good, even lighting. Check your connection and try again."
+        "Couldn't read the label. Check your internet connection, make sure the label is well lit and in focus, and try again."
       );
     }
   }
@@ -221,7 +221,7 @@ export function LabelOcrCapture({ onResult, onClose }: LabelOcrCaptureProps) {
             <div className="h-8 w-8 animate-spin rounded-full border-2 border-white border-t-transparent" />
             <p className="text-sm">Reading label…</p>
             <p className="max-w-xs text-center text-xs text-white/70">
-              First use downloads a small language file — this can take a bit longer once.
+              This can take a few seconds, longer if it falls back to offline reading.
             </p>
           </div>
         )}
