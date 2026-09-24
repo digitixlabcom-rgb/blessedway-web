@@ -55,6 +55,19 @@ that calls your own backend endpoint (see `BackendProxyProvider` in
 `ProductLookupService.ts` for the shape) — the key stays server-side, never
 in frontend code.
 
+### Label OCR fallback
+
+When a barcode isn't found (common for non-food items, since the default
+provider is Open Food Facts), the confirmation form offers **Scan Product
+Label**: it opens the camera, and on-device OCR (`tesseract.js`, WASM — the
+image never leaves the browser) reads the label to guess the product name
+(with size, e.g. "200 ml", appended) and the brand, filling in whatever
+fields are still empty. This is a best-effort draft, not a lookup — it's
+always shown for review/edit before saving, never auto-saved. First use
+needs an internet connection to download the OCR engine (a few MB, cached
+afterward); the heuristic (tallest line on the label = brand) was verified
+against a real product photo in `src/services/OcrService.ts`.
+
 ### Barcodes are always text
 
 Every place a barcode is written to Excel forces the cell type to text

@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
+import { ScanText } from "lucide-react";
 import type { Category, LookupStatus } from "../../types";
 import { categoryService } from "../../services/CategoryService";
 import { isValidBarcode } from "../../utils/validation";
+import { LabelOcrCapture } from "../scanner/LabelOcrCapture";
+import type { LabelOcrResult } from "../../services/OcrService";
+import { useToast } from "../../hooks/useToast";
 
 export interface ProductFormValues {
   barcode: string;
@@ -48,6 +52,9 @@ export function ProductForm({
   const [addingCategory, setAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showLabelScanner, setShowLabelScanner] = useState(false);
+  const [lastOcrText, setLastOcrText] = useState<string | null>(null);
+  const { show } = useToast();
 
   // A lookup provider may suggest a category that isn't in the user's list
   // yet (e.g. "Confectioneries" from an external taxonomy). Register it so
@@ -85,6 +92,33 @@ export function ProductForm({
     return Object.keys(next).length === 0;
   }
 
+  function handleLabelResult(result: LabelOcrResult) {
+    setShowLabelScanner(false);
+    setLastOcrText(result.rawText || null);
+
+    const filled: string[] = [];
+    setValues((v) => {
+      const next = { ...v };
+      if (!next.productName.trim() && result.guessedProductName) {
+        next.productName = result.guessedProductName;
+        filled.push("product name");
+      }
+      if (!next.brandName.trim() && result.guessedBrand) {
+        next.brandName = result.guessedBrand;
+        filled.push("brand");
+      }
+      return next;
+    });
+
+    if (!result.guessedProductName && !result.guessedBrand) {
+      show("Couldn't make out the label clearly — see the scanned text below and fill in manually.", "info");
+    } else if (filled.length === 0) {
+      show("Name and brand already filled — see the scanned text below if you want to copy from it.", "info");
+    } else {
+      show(`Filled ${filled.join(" and ")} from the label. Please double-check before saving.`, "success");
+    }
+  }
+
   function handleSubmit() {
     if (!validate()) return;
     onSave({
@@ -102,6 +136,24 @@ export function ProductForm({
       <div className={`rounded-lg border px-3 py-2 text-sm font-medium ${banner.className}`}>
         {banner.text}
       </div>
+
+      {lookupStatus !== "found" && (
+        <button
+          type="button"
+          onClick={() => setShowLabelScanner(true)}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-brand-300 bg-brand-50 py-2.5 text-sm font-semibold text-brand-700 hover:bg-brand-100"
+        >
+          <ScanText size={16} />
+          Scan Product Label (fill name &amp; brand from a photo)
+        </button>
+      )}
+
+      {lastOcrText && (
+        <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+          <p className="mb-1 font-semibold uppercase text-slate-400">Text read from label</p>
+          <p className="whitespace-pre-wrap">{lastOcrText}</p>
+        </div>
+      )}
 
       <div>
         <label className="block text-xs font-semibold uppercase text-slate-500">Barcode</label>
@@ -228,6 +280,10 @@ export function ProductForm({
         </button>
       </div>
       {extraActions}
+
+      {showLabelScanner && (
+        <LabelOcrCapture onResult={handleLabelResult} onClose={() => setShowLabelScanner(false)} />
+      )}
     </div>
   );
 }
