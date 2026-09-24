@@ -298,7 +298,8 @@ export async function recognizeLabelSmart(
   geminiApiKey: string,
   geminiModel: string
 ): Promise<LabelOcrResult> {
-  if (!geminiApiKey.trim()) {
+  const trimmedKey = (geminiApiKey ?? "").trim();
+  if (!trimmedKey) {
     const fallback = await recognizeProductLabel(image);
     fallback.geminiError = "No Gemini API key set — add one in Settings for AI-powered reading.";
     return fallback;
@@ -308,8 +309,8 @@ export async function recognizeLabelSmart(
     return await recognizeLabelWithGemini(
       image,
       categories,
-      geminiApiKey.trim(),
-      geminiModel.trim() || DEFAULT_GEMINI_MODEL
+      trimmedKey,
+      (geminiModel ?? "").trim() || DEFAULT_GEMINI_MODEL
     );
   } catch (err) {
     const fallback = await recognizeProductLabel(image);
