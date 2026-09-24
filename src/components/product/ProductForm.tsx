@@ -54,6 +54,7 @@ export function ProductForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showLabelScanner, setShowLabelScanner] = useState(false);
   const [lastOcrText, setLastOcrText] = useState<string | null>(null);
+  const [lastGeminiError, setLastGeminiError] = useState<string | null>(null);
   const { show } = useToast();
 
   // A lookup provider may suggest a category that isn't in the user's list
@@ -95,6 +96,7 @@ export function ProductForm({
   async function handleLabelResult(result: LabelOcrResult) {
     setShowLabelScanner(false);
     setLastOcrText(result.rawText || null);
+    setLastGeminiError(result.geminiError || null);
 
     // Compute what to fill from the current (closure) snapshot of values —
     // not inside the setValues updater. React doesn't guarantee a function
@@ -124,7 +126,9 @@ export function ProductForm({
       onCategoryAdded?.();
     }
 
-    if (!result.guessedProductName && !result.guessedBrand) {
+    if (result.geminiError) {
+      show(`AI label reader unavailable (${result.geminiError}) — used offline reading instead.`, "info");
+    } else if (!result.guessedProductName && !result.guessedBrand) {
       show("Couldn't make out the label clearly — see the scanned text below and fill in manually.", "info");
     } else if (filled.length === 0) {
       show("Those fields were already filled — see the scanned text below if you want to copy from it.", "info");
@@ -161,6 +165,13 @@ export function ProductForm({
           <ScanText size={16} />
           Scan Product Label (fill name, brand &amp; category from a photo)
         </button>
+      )}
+
+      {lastGeminiError && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+          <p className="mb-1 font-semibold uppercase text-amber-600">AI label reader unavailable</p>
+          <p className="whitespace-pre-wrap">{lastGeminiError}</p>
+        </div>
       )}
 
       {lastOcrText && (

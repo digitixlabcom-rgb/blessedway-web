@@ -21,6 +21,7 @@ export interface LabelOcrResult {
   guessedCategory?: string;
   confidence: number;
   source: "gemini" | "tesseract";
+  geminiError?: string;
 }
 
 export interface OcrLine {
@@ -185,7 +186,12 @@ export async function recognizeLabelSmart(
 ): Promise<LabelOcrResult> {
   try {
     return await recognizeLabelWithGemini(image, categories);
-  } catch {
-    return recognizeProductLabel(image);
+  } catch (err) {
+    const fallback = await recognizeProductLabel(image);
+    // Surfaced in the UI so a real misconfiguration (bad key, wrong model,
+    // payload too large, etc.) is visible instead of silently and
+    // indistinguishably degrading to the cruder on-device reading.
+    fallback.geminiError = err instanceof Error ? err.message : "Unknown error calling Gemini.";
+    return fallback;
   }
 }
