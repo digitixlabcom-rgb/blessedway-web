@@ -83,6 +83,7 @@ export interface AppSettings {
   activeSessionId: string | null;
   duplicatesPrevented: number;
   geminiApiKey: string;
+  geminiModel: string;
 }
 
 export const DEFAULT_CATEGORIES = [
@@ -115,6 +116,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   activeSessionId: null,
   duplicatesPrevented: 0,
   geminiApiKey: "",
+  geminiModel: "gemini-3.8-flash",
 };
 
 export interface ProductFilters {

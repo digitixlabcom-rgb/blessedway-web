@@ -5,6 +5,7 @@ import { recognizeLabelSmart, type LabelOcrResult } from "../../services/OcrServ
 interface LabelOcrCaptureProps {
   categories: string[];
   geminiApiKey: string;
+  geminiModel: string;
   onResult: (result: LabelOcrResult) => void;
   onClose: () => void;
 }
@@ -32,7 +33,7 @@ async function waitForVideoDimensions(video: HTMLVideoElement, timeoutMs: number
   return video.videoWidth > 0 && video.videoHeight > 0;
 }
 
-export function LabelOcrCapture({ categories, geminiApiKey, onResult, onClose }: LabelOcrCaptureProps) {
+export function LabelOcrCapture({ categories, geminiApiKey, geminiModel, onResult, onClose }: LabelOcrCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const generationRef = useRef(0);
@@ -178,7 +179,7 @@ export function LabelOcrCapture({ categories, geminiApiKey, onResult, onClose }:
     setPhase("processing");
     try {
       const result = await Promise.race([
-        recognizeLabelSmart(canvas, categories, geminiApiKey),
+        recognizeLabelSmart(canvas, categories, geminiApiKey, geminiModel),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 30000)),
       ]);
       onResult(result);

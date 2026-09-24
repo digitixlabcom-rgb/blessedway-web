@@ -128,7 +128,7 @@ export async function recognizeProductLabel(image: HTMLCanvasElement): Promise<L
 // multi-tenant public app. Don't reuse this pattern for a shared deployment.
 
 const GEMINI_TIMEOUT_MS = 20000;
-const GEMINI_MODEL = "gemini-2.0-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
 
 interface GeminiApiResponse {
   found: boolean;
@@ -190,7 +190,8 @@ function toGeminiJpegDataUrl(canvas: HTMLCanvasElement, quality = 0.82): string 
 async function recognizeLabelWithGemini(
   image: HTMLCanvasElement,
   categories: string[],
-  apiKey: string
+  apiKey: string,
+  model: string
 ): Promise<LabelOcrResult> {
   const dataUrl = toGeminiJpegDataUrl(image);
   const commaIndex = dataUrl.indexOf(",");
@@ -227,7 +228,7 @@ async function recognizeLabelWithGemini(
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -294,7 +295,8 @@ async function recognizeLabelWithGemini(
 export async function recognizeLabelSmart(
   image: HTMLCanvasElement,
   categories: string[],
-  geminiApiKey: string
+  geminiApiKey: string,
+  geminiModel: string
 ): Promise<LabelOcrResult> {
   if (!geminiApiKey.trim()) {
     const fallback = await recognizeProductLabel(image);
@@ -303,7 +305,12 @@ export async function recognizeLabelSmart(
   }
 
   try {
-    return await recognizeLabelWithGemini(image, categories, geminiApiKey.trim());
+    return await recognizeLabelWithGemini(
+      image,
+      categories,
+      geminiApiKey.trim(),
+      geminiModel.trim() || DEFAULT_GEMINI_MODEL
+    );
   } catch (err) {
     const fallback = await recognizeProductLabel(image);
     // Surfaced in the UI so a real misconfiguration (bad key, wrong model,

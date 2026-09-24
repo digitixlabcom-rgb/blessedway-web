@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { CheckCircle2, XCircle, Loader2, Eye, EyeOff } from "lucide-react";
 import { productLookupService, LOOKUP_PROVIDERS } from "../services/ProductLookupService";
 import { exportService } from "../services/ExportService";
+import { DEFAULT_GEMINI_MODEL } from "../services/OcrService";
 import { getDB, ensureSeedData } from "../db/database";
 import { DEFAULT_SETTINGS } from "../types";
 import type { AppSettings } from "../types";
@@ -155,6 +156,29 @@ export function SettingsPage({ settings, onChange }: SettingsPageProps) {
         >
           Get a free key at aistudio.google.com/app/apikey →
         </a>
+
+        <Row label="Model">
+          <input
+            type="text"
+            value={settings.geminiModel}
+            onChange={(e) => onChange({ geminiModel: e.target.value })}
+            placeholder={DEFAULT_GEMINI_MODEL}
+            className="w-40 rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
+          />
+        </Row>
+        <p className="text-xs text-slate-400">
+          Google periodically retires older model names. If label reading starts failing with a "model
+          not found" error, check{" "}
+          <a
+            href="https://ai.google.dev/gemini-api/docs/models"
+            target="_blank"
+            rel="noreferrer"
+            className="text-brand-600"
+          >
+            the current model list
+          </a>{" "}
+          and update this field — no redeploy needed.
+        </p>
       </Section>
 
       <Section title="Scanner">

@@ -296,6 +296,7 @@ export function ProductsPage({ settings, highlightProductId, onHighlightHandled 
             lookupStatus={editing.lookupStatus}
             categories={categories}
             geminiApiKey={settings.geminiApiKey}
+            geminiModel={settings.geminiModel}
             barcodeEditable
             saveLabel="Update Product"
             onSave={handleEditSave}
