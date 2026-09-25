@@ -193,11 +193,14 @@ class GeminiHttpError extends Error {
   }
 }
 
-// Statuses worth one automatic retry: 503 (Google's own "temporarily
-// overloaded, try again" — seen in practice) and 429 (rate limited). Neither
-// means anything is misconfigured; both commonly clear within a couple of
-// seconds.
-const RETRYABLE_STATUSES = new Set([429, 503]);
+// Only 503 (Google's own "temporarily overloaded, try again" — seen in
+// practice) is worth one automatic retry; it commonly clears within a
+// couple of seconds and isn't a sign anything is misconfigured. 429 is
+// deliberately excluded: it means the free-tier rate or daily quota is
+// already used up, and firing a second request straight away doesn't wait
+// out either kind of window — it only spends another request against the
+// same exhausted quota, reaching "quota exceeded" twice as fast.
+const RETRYABLE_STATUSES = new Set([503]);
 const RETRY_DELAY_MS = 2000;
 
 function wait(ms: number): Promise<void> {
@@ -353,8 +356,18 @@ export async function recognizeLabelSmart(
     const fallback = await recognizeProductLabel(image);
     // Surfaced in the UI so a real misconfiguration (bad key, wrong model,
     // etc.) is visible instead of silently and indistinguishably degrading
-    // to the cruder on-device reading.
-    fallback.geminiError = err instanceof Error ? err.message : "Unknown error calling Gemini.";
+    // to the cruder on-device reading. 429 gets a plain-language message
+    // instead of Google's raw JSON error, since it's the one case with a
+    // clear, actionable fix (wait it out, or add billing).
+    if (err instanceof GeminiHttpError && err.status === 429) {
+      fallback.geminiError =
+        "Gemini free-tier limit reached (per-minute or daily quota). Wait a minute and try again, " +
+        "or check back after midnight Pacific time for the daily reset. For scanning many products " +
+        "in a row without limits, enable billing on your Google AI Studio project — Gemini's Flash " +
+        "models cost a small fraction of a cent per image.";
+    } else {
+      fallback.geminiError = err instanceof Error ? err.message : "Unknown error calling Gemini.";
+    }
     return fallback;
   }
 }

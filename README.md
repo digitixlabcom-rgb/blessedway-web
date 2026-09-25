@@ -135,6 +135,24 @@ Two readers, tried in order (`src/services/OcrService.ts`):
 Without a key set, label scanning still works end-to-end via the on-device
 fallback alone — Gemini is a quality upgrade, not a requirement.
 
+#### Free-tier limits when scanning many products
+
+A free Gemini API key is capped by Google on both requests-per-minute and
+requests-per-day (exact numbers vary by model and change over time — see
+[ai.google.dev/gemini-api/docs/rate-limits](https://ai.google.dev/gemini-api/docs/rate-limits)).
+Scanning a large batch of products back-to-back can hit that cap; when it
+does, Gemini returns a 429 error, the app shows a plain-language "free-tier
+limit reached" message, and falls back to the on-device Tesseract reader for
+that scan so you're never blocked from saving a product. Options if this
+happens often:
+
+- **Wait it out.** The per-minute cap clears within a minute; the daily cap
+  resets at midnight Pacific time.
+- **Enable billing** on the Google AI Studio / Cloud project behind your key.
+  Gemini's Flash models cost a small fraction of a cent per image, so
+  scanning hundreds of products costs cents, and paid-tier rate/daily limits
+  are far higher than the free tier's.
+
 ### Installing on a phone
 
 This is a PWA, so on Android Chrome, opening the deployed URL and choosing
