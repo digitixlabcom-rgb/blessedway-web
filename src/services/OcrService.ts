@@ -187,7 +187,24 @@ function toGeminiJpegDataUrl(canvas: HTMLCanvasElement, quality = 0.82): string 
   return resized.toDataURL("image/jpeg", quality);
 }
 
-async function recognizeLabelWithGemini(
+class GeminiHttpError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+  }
+}
+
+// Statuses worth one automatic retry: 503 (Google's own "temporarily
+// overloaded, try again" — seen in practice) and 429 (rate limited). Neither
+// means anything is misconfigured; both commonly clear within a couple of
+// seconds.
+const RETRYABLE_STATUSES = new Set([429, 503]);
+const RETRY_DELAY_MS = 2000;
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function attemptGeminiCall(
   image: HTMLCanvasElement,
   categories: string[],
   apiKey: string,
@@ -239,7 +256,10 @@ async function recognizeLabelWithGemini(
 
     if (!response.ok) {
       const text = await response.text().catch(() => "");
-      throw new Error(`Gemini request failed (${response.status}): ${text.slice(0, 200)}`);
+      throw new GeminiHttpError(
+        `Gemini request failed (${response.status}): ${text.slice(0, 200)}`,
+        response.status
+      );
     }
 
     const data = (await response.json()) as GeminiRawResponse;
@@ -284,6 +304,23 @@ async function recognizeLabelWithGemini(
     };
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function recognizeLabelWithGemini(
+  image: HTMLCanvasElement,
+  categories: string[],
+  apiKey: string,
+  model: string
+): Promise<LabelOcrResult> {
+  try {
+    return await attemptGeminiCall(image, categories, apiKey, model);
+  } catch (err) {
+    if (err instanceof GeminiHttpError && RETRYABLE_STATUSES.has(err.status)) {
+      await wait(RETRY_DELAY_MS);
+      return attemptGeminiCall(image, categories, apiKey, model);
+    }
+    throw err;
   }
 }
 
